@@ -8,29 +8,67 @@ import re
 import yaml
 
 
+def convert_ruby_to_html(text: str) -> str:
+    """
+    テキスト内の特定のルビ表記パターンをHTMLの<ruby>タグ形式に変換します。
+
+    対応するパターンと優先順位:
+    1.  括弧のルビ回避: `｜(テキスト)` または `|(テキスト)` -> `(テキスト)`
+        (括弧の直前に縦線がある場合、ルビとして解釈せず縦線のみを削除)
+    2.  縦線付き明示的ルビ: `｜ベーステキスト《ルビ》` または `|ベーステキスト《ルビ》`
+        (全角または半角の縦線で始まり、ベーステキストの後に二重山括弧でルビが続く)
+    3.  暗黙的なルビ（漢字 + 二重山括弧）: `漢字《ひらがな/カタカナ》`
+        (漢字のベーステキストの後に二重山括弧でルビが続く。縦線は省略可能)
+    4.  暗黙的なルビ（漢字 + 括弧）: `漢字(ひらがな/カタカナ)`
+        (漢字のベーステキストの後に括弧でルビが続く。)
+
+    Args:
+        text: ルビ表記を含む入力文字列。
+
+    Returns:
+        HTMLの<ruby>タグに変換された文字列。
+    """
+
+    # 処理するパターンのリスト。優先順位の高い順に並べる。
+    # 各要素は (コンパイル済み正規表現, 置換関数) のタプル。
+    # 置換関数はマッチオブジェクトを受け取り、置換後の文字列を返す。
+    patterns = [
+        # パターン1: 括弧のルビ回避 (｜(テキスト) または |(テキスト))
+        # 縦線と括弧内のテキストをキャプチャし、縦線を除去した括弧付きテキストに置換
+        (re.compile(r'[｜|]\((.*?)\)'), lambda m: f'({m.group(1)})'),
+        (re.compile(r'[｜|]（(.*?)）'), lambda m: f'({m.group(1)})'),
+
+        # パターン2: 縦線付き明示的ルビ (｜ベーステキスト《ルビ》 または |ベーステキスト《ルビ》)
+        # 縦線、ベーステキスト、ルビをキャプチャし、<ruby>タグ形式に置換
+        # ベーステキストとルビは非貪欲マッチ(.+?)を使用
+        (re.compile(r'[｜|](.+?)《(.+?)》'), lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
+
+        # パターン3: 暗黙的なルビ（漢字 + 二重山括弧）(漢字《ひらがな/カタカナ》)
+        # 漢字、ルビ(ひらがな/カタカナ)をキャプチャし、<ruby>タグ形式に置換
+        (re.compile(r'([一-龠々]+)《([ぁ-んァ-ヶー]+)》'), lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
+
+        # パターン4: 暗黙的なルビ（漢字 + 括弧）(漢字(ひらがな/カタカナ))
+        # 漢字、ルビ(ひらがな/カタカナ)をキャプチャし、<ruby>タグ形式に置換
+        (re.compile(r'([一-龠々]+)\(([ぁ-んァ-ヶー]+)\)'), lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
+        (re.compile(r'([一-龠々]+)（([ぁ-んァ-ヶー]+)）'), lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
+    ]
+
+    processed_text = text
+    # 定義した優先順位で各パターンをテキストに適用
+    for pattern_compiled, replacement_func in patterns:
+        processed_text = pattern_compiled.sub(replacement_func, processed_text)
+
+    return processed_text
+
+
 def convert_line_text_to_html(line_text):
     """
     1行のテキストを処理し、ルビ変換（行頭以外）、縦中横変換を行います。
     """
     processed_line = line_text
 
-    # 1. ルビ変換 (行頭以外)
-    # パターン: 漢字(親文字) + （ルビ文字）
-    # 親文字: [一-龠々]+ (漢字および繰り返し記号「々」の1文字以上)
-    # ルビ文字: [^（）]+? (始め括弧と終わり括弧以外の1文字以上、非貪欲マッチ)
-    # 正規表現のコールバック関数を使って、行頭かどうかを判定
-    def ruby_replace_callback(match):
-        # マッチオブジェクトのstart()で行頭かどうかを判定
-        # この関数は1行単位で呼び出されるため、match.start(0) == 0 が行頭を意味する
-        # if match.start(0) == 0:
-        #     return match.group(0) # 行頭なら変換せず元の文字列を返す
-        # else:
-        parent_text = match.group(1)
-        ruby_text = match.group(2)
-        return f'<ruby>{parent_text}<rt>{ruby_text}</rt></ruby>'
-
-    # 注意: 漢字の範囲 [一-龠] は一般的なもの。より広範な文字を親文字に含めたい場合は調整が必要。
-    processed_line = re.sub(r'([一-龠々]+)（([^（）]+?)）', ruby_replace_callback, processed_line)
+    # 1. ルビ変換
+    processed_line = convert_ruby_to_html(processed_line)
 
     # 2. 縦中横変換 ( [[...]] で囲まれた半角英数字記号2～4文字程度)
     def tcy_replace_callback(match):
