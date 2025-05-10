@@ -80,6 +80,10 @@ def convert_line_text_to_html(line_text):
 
     processed_line = re.sub(r'\[\[([a-zA-Z0-9.,\-:/+]{2,4}?)\]\]', tcy_replace_callback, processed_line)
 
+    # 3. 改行処理など
+    processed_line = re.sub(r'^[	 　◇◆☆★〇○◎●△▲▽▼※〒〓]+$', '<br/>', processed_line)
+    processed_line = re.sub(r'^[	 　＊]+$', '<br/><hr/>', processed_line)
+
     return processed_line
 
 
