@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
 import glob
 from ebooklib import epub
@@ -228,7 +231,7 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
 
     for i, txt_file_path in enumerate(txt_files):
         file_name_only = os.path.basename(txt_file_path)
-        chapter_title = os.path.splitext(file_name_only)[0]
+        chapter_title = re.sub(r'^エピソード[0-9]+：', '', os.path.splitext(file_name_only)[0])
 
         try:
             with open(txt_file_path, 'r', encoding='utf-8') as f:
