@@ -1,2 +1,2 @@
-EbookLib
-PyYAML
+ebooklib==0.19
+PyYAML==6.0.2
