@@ -1,4 +1,4 @@
 *.epub
-config.yaml
+*.yaml
 docs/
 
