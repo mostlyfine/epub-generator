@@ -6,6 +6,7 @@ import glob
 from ebooklib import epub
 import re
 import yaml
+import sys
 
 
 def convert_ruby_to_html(text: str) -> str:
@@ -337,7 +338,8 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
 
 # --- メイン処理 ---
 if __name__ == '__main__':
-    config_file_name = 'config.yaml'
+    # コマンドライン引数から設定ファイル名を取得
+    config_file_name = sys.argv[1] if len(sys.argv) > 1 else 'config.yaml'
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config_file_path = os.path.join(script_dir, config_file_name)
 
