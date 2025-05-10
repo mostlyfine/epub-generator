@@ -295,8 +295,18 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
             r'^エピソード[0-9]+：', '', os.path.splitext(file_name_only)[0])
 
         try:
-            with open(txt_file_path, 'r', encoding='utf-8') as f:
-                content_text = f.read()
+            with open(txt_file_path, 'rb') as f:
+                raw_data = f.read()
+            try:
+                content_text = raw_data.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    try:
+                        content_text = raw_data.decode('cp932')
+                    except UnicodeDecodeError:
+                        content_text = raw_data.decode('shift_jis')
+                except UnicodeDecodeError:
+                    content_text = raw_data.decode('euc-jp')
         except Exception as e:
             print(f"ファイル '{txt_file_path}' の読み込み中にエラー: {e}")
             continue
