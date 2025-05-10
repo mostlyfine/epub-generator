@@ -377,27 +377,7 @@ if __name__ == '__main__':
 
     if not os.path.exists(config_file_path):
         print(f"エラー: 設定ファイル '{config_file_path}' が見つかりません。")
-        print("スクリプトと同じディレクトリに config.yaml を作成してください。内容は以下の例を参考にしてください：")
-        sample_config_content = """
-# EPUB書籍の設定 (config.yaml)
-book_settings:
-  title: "私の縦書き小説（ルビ対応版）"
-  author: "AI 次郎"
-  language: "ja"
-  input_directory: "docs"  # このディレクトリを作成し、txtファイルを入れてください
-  output_file: "MyVerticalNovel_Ruby.epub"
-  cover_image: "my_cover.jpg"       # (任意) カバー画像ファイル名
-
-# CSS設定 (任意、なければスクリプト内のデフォルト値を使用)
-# css_settings:
-#   font_family: '"Noto Serif CJK JP", serif'
-#   line_height: 1.9
-"""
-        print("\n--- config.yaml の例 ---")
-        print(sample_config_content)
-        print("-----------------------\n")
-        print("テキストファイル内でルビを振りたい箇所は「漢字（かんじ）」のように、")
-        print("縦中横にしたい箇所は [[ABC]] のように囲んでください。")
+        print("スクリプトと同じディレクトリに config.yaml を作成するか、引数で設定ファイルを指定してください。内容はconfig.yaml.sampleを参考にしてください：")
     else:
         try:
             with open(config_file_path, 'r', encoding='utf-8') as f:
