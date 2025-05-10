@@ -1,0 +1,15 @@
+# EPUB書籍の設定 (config.yaml)
+book_settings:
+  title: "私の縦書き小説（ルビ対応版）"
+  author: "AI 次郎"
+  language: "ja"
+  input_directory: "docs"  # このディレクトリを作成し、txtファイルを入れてください
+  output_file: "output.epub"
+  cover_image: "docs/cover.jpg"       # (任意) カバー画像ファイル名
+
+# CSS設定 (任意、なければスクリプト内のデフォルト値を使用)
+# css_settings:
+#   font_family: '"Noto Serif CJK JP", serif'
+#   line_height: 1.9
+#   margin_horizontal: 10px
+#   margin_vertical: 10px
