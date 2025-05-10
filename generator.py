@@ -42,16 +42,20 @@ def convert_ruby_to_html(text: str) -> str:
         # パターン2: 縦線付き明示的ルビ (｜ベーステキスト《ルビ》 または |ベーステキスト《ルビ》)
         # 縦線、ベーステキスト、ルビをキャプチャし、<ruby>タグ形式に置換
         # ベーステキストとルビは非貪欲マッチ(.+?)を使用
-        (re.compile(r'[｜|](.+?)《(.+?)》'), lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
+        (re.compile(r'[｜|](.+?)《(.+?)》'),
+         lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
 
         # パターン3: 暗黙的なルビ（漢字 + 二重山括弧）(漢字《ひらがな/カタカナ》)
         # 漢字、ルビ(ひらがな/カタカナ)をキャプチャし、<ruby>タグ形式に置換
-        (re.compile(r'([一-龠々]+)《([ぁ-んァ-ヶー]+)》'), lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
+        (re.compile(r'([一-龠々]+)《([ぁ-んァ-ヶー]+)》'),
+         lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
 
         # パターン4: 暗黙的なルビ（漢字 + 括弧）(漢字(ひらがな/カタカナ))
         # 漢字、ルビ(ひらがな/カタカナ)をキャプチャし、<ruby>タグ形式に置換
-        (re.compile(r'([一-龠々]+)\(([ぁ-んァ-ヶー]+)\)'), lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
-        (re.compile(r'([一-龠々]+)（([ぁ-んァ-ヶー]+)）'), lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
+        (re.compile(r'([一-龠々]+)\(([ぁ-んァ-ヶー]+)\)'),
+         lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
+        (re.compile(r'([一-龠々]+)（([ぁ-んァ-ヶー]+)）'),
+         lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
     ]
 
     processed_text = text
@@ -79,11 +83,14 @@ def convert_line_text_to_html(line_text):
             return f'<span class="tcy">{content}</span>'
         return match.group(0)   # 条件に合わなければ元の文字列を返す (例: [[長すぎる文字列]])
 
-    processed_line = re.sub(r'\[\[([a-zA-Z0-9.,\-:/+]{2,4}?)\]\]', tcy_replace_callback, processed_line)
+    processed_line = re.sub(
+        r'\[\[([a-zA-Z0-9.,\-:/+]{2,4}?)\]\]', tcy_replace_callback, processed_line)
 
     # 3. 改行処理など
-    processed_line = re.sub(r'^[	 　◇◆☆★〇○◎●△▲▽▼※〒〓]+$', '<br/>', processed_line)
-    processed_line = re.sub(r'^[	 　＊]+$', '<br/><hr/>', processed_line)
+    processed_line = re.sub(
+        r'^[	 　◇◆☆★〇○◎●△▲▽▼※〒〓]+$', '<br/>', processed_line)
+    processed_line = re.sub(r'^[	 　＊−ー]+$', '<br/><hr/>', processed_line)
+    processed_line = re.sub(r'［＃.+］', '', processed_line)
 
     return processed_line
 
@@ -106,12 +113,14 @@ def convert_full_text_to_html(text_content):
             for single_line in para_text.split('\n'):
                 if single_line.strip():     # 行が空でなければ処理
                     # 各行に対してルビと縦中横の変換を適用
-                    processed_html_line = convert_line_text_to_html(single_line.strip())
+                    processed_html_line = convert_line_text_to_html(
+                        single_line.strip())
                     html_lines_in_paragraph.append(processed_html_line)
 
             if html_lines_in_paragraph:
                 # 処理された行を<br />で結合し、<p>タグで囲む
-                html_paragraphs.append('<p>' + '<br />'.join(html_lines_in_paragraph) + '</p>')
+                html_paragraphs.append(
+                    '<p>' + '<br />'.join(html_lines_in_paragraph) + '</p>')
 
     return '\n'.join(html_paragraphs)
 
@@ -139,13 +148,15 @@ def create_vertical_epub(config):
         print("エラー: 設定ファイルに 'input_directory' または 'output_file' が指定されていません。")
         return
 
-    config_dir = os.path.dirname(os.path.abspath(config.get('_config_file_path', '.')))
+    config_dir = os.path.dirname(os.path.abspath(
+        config.get('_config_file_path', '.')))
     input_dir = os.path.join(config_dir, input_dir)
     output_epub_file = os.path.join(config_dir, output_epub_file)
     if cover_image_path:
         cover_image_path = os.path.join(config_dir, cover_image_path)
         if not os.path.exists(cover_image_path):
-            print(f"警告: 指定されたカバー画像 '{cover_image_path}' が見つかりません。カバーなしで処理を続行します。")
+            print(
+                f"警告: 指定されたカバー画像 '{cover_image_path}' が見つかりません。カバーなしで処理を続行します。")
             cover_image_path = None
     else:
         cover_image_path = None
@@ -158,7 +169,8 @@ def create_vertical_epub(config):
     book.direction = 'rtl'
 
     # --- 縦書き用CSS ---
-    font_family = css_config.get('font_family', '"游明朝", "Yu Mincho", "Hiragino Mincho ProN", "ヒラギノ明朝 ProN W3", "MS Mincho", "ＭＳ 明朝", serif')
+    font_family = css_config.get(
+        'font_family', '"游明朝", "Yu Mincho", "Hiragino Mincho ProN", "ヒラギノ明朝 ProN W3", "MS Mincho", "ＭＳ 明朝", serif')
     line_height = css_config.get('line_height', 1.8)
     margin_vertical = css_config.get('margin_vertical', '20px')
     margin_horizontal = css_config.get('margin_horizontal', '30px')
@@ -227,9 +239,12 @@ img {{
             cover_filename = os.path.basename(cover_image_path)
             cover_ext = os.path.splitext(cover_filename)[1].lower()
             media_type = 'image/jpeg'
-            if cover_ext == '.png': media_type = 'image/png'
-            elif cover_ext == '.gif': media_type = 'image/gif'
-            elif cover_ext == '.svg': media_type = 'image/svg+xml'
+            if cover_ext == '.png':
+                media_type = 'image/png'
+            elif cover_ext == '.gif':
+                media_type = 'image/gif'
+            elif cover_ext == '.svg':
+                media_type = 'image/svg+xml'
 
             epub_image_filename = f'cover_image{cover_ext}'
             epub_image_path_in_epub = f'images/{epub_image_filename}'
@@ -245,13 +260,15 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
             cover_image_epub_item = epub.EpubItem(uid='cover_image_data', file_name=epub_image_path_in_epub,
                                                   media_type=media_type, content=cover_data)
             book.add_item(cover_image_epub_item)
-            book.add_metadata('OPF', 'meta', '', {'name': 'cover', 'content': 'cover_image_data'})
+            book.add_metadata('OPF', 'meta', '', {
+                              'name': 'cover', 'content': 'cover_image_data'})
         except Exception as e:
             print(f"カバー画像の処理中にエラーが発生しました: {e}")
             actual_cover_item = None
     else:
         if book_config.get('cover_image'):
-            print(f"情報: カバー画像パス '{book_config.get('cover_image')}' は指定されましたが見つかりませんでした。")
+            print(
+                f"情報: カバー画像パス '{book_config.get('cover_image')}' は指定されましたが見つかりませんでした。")
         else:
             print("情報: カバー画像は設定されていません。")
 
@@ -274,7 +291,8 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
 
     for i, txt_file_path in enumerate(txt_files):
         file_name_only = os.path.basename(txt_file_path)
-        chapter_title = re.sub(r'^エピソード[0-9]+：', '', os.path.splitext(file_name_only)[0])
+        chapter_title = re.sub(
+            r'^エピソード[0-9]+：', '', os.path.splitext(file_name_only)[0])
 
         try:
             with open(txt_file_path, 'r', encoding='utf-8') as f:
@@ -286,11 +304,13 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
         # ルビ・縦中横処理を含むHTML変換
         html_content = convert_full_text_to_html(content_text)
 
-        safe_chapter_title_for_filename = re.sub(r'[^\x00-\x7F]+', '', chapter_title)
+        safe_chapter_title_for_filename = re.sub(
+            r'[^\x00-\x7F]+', '', chapter_title)
         if not safe_chapter_title_for_filename:
             safe_chapter_title_for_filename = f"chapter_{i+1}"
         else:
-            safe_chapter_title_for_filename = re.sub(r'\s+', '_', safe_chapter_title_for_filename)
+            safe_chapter_title_for_filename = re.sub(
+                r'\s+', '_', safe_chapter_title_for_filename)
         xhtml_file_name = f"c_{i+1}_{safe_chapter_title_for_filename[:20]}.xhtml"
 
         chapter_obj = epub.EpubHtml(title=chapter_title,
@@ -313,7 +333,8 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
         chapter_obj.add_item(default_css)   # CSSを各チャプターにリンク
         book.add_item(chapter_obj)
         chapters.append(chapter_obj)
-        toc_links.append(epub.Link(xhtml_file_name, chapter_title, f"toc_chap_{i+1}"))
+        toc_links.append(
+            epub.Link(xhtml_file_name, chapter_title, f"toc_chap_{i+1}"))
 
     # --- 目次 (TOC), NCX, Nav の設定 ---
     book.toc = tuple(toc_links)
@@ -330,7 +351,8 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
     # --- EPUBファイル書き出し ---
     try:
         os.makedirs(os.path.dirname(output_epub_file), exist_ok=True)
-        epub.write_epub(output_epub_file, book, {"epub3_pages": True, "epub3_landmark": True})
+        epub.write_epub(output_epub_file, book, {
+                        "epub3_pages": True, "epub3_landmark": True})
         print(f"EPUBファイル '{output_epub_file}' を正常に生成しました。")
     except Exception as e:
         print(f"EPUBファイルの書き出し中にエラーが発生しました: {e}")
