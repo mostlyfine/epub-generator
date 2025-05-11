@@ -127,11 +127,11 @@ def convert_full_text_to_html(text_content):
     """
     # Windowsの改行コード(CRLF)をLFに統一し、3つ以上の連続改行を2つにまとめる
     processed_text = text_content.replace('\r\n', '\n')
-    processed_text = re.sub(r'\n{3,}', '\n\n', processed_text)
+    processed_text = re.sub(r'\n{3,}', '\n\n\n', processed_text)
 
     html_paragraphs = []
     # 2つの改行で段落に分割
-    for para_text in processed_text.strip().split('\n\n'):
+    for para_text in processed_text.strip().split('\n\n\n'):
         if para_text.strip():   # 空の段落は無視
             html_lines_in_paragraph = []
             # 段落内の各行に分割
@@ -217,7 +217,7 @@ body {{
     padding: 0;
 }}
 p {{
-    margin: 0 0 1em 0; /* 縦書きでは段落の右側のマージン */
+    margin: 0 2em 0 0; /* 縦書きでは段落の右側のマージン */
     line-height: {line_height};
     text-align: justify;
 }}
