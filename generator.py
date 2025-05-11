@@ -89,7 +89,7 @@ def convert_line_text_to_html(line_text):
     # 3. 改行処理など
     processed_line = re.sub(
         r'^[	 　◇◆☆★〇○◎●△▲▽▼※〒〓]+$', '<br/>', processed_line)
-    processed_line = re.sub(r'^[	 　＊−ー]+$', '<br/><hr/>', processed_line)
+    processed_line = re.sub(r'^[	 　＊\−\-ー]+$', '<br/><hr/>', processed_line)
     processed_line = re.sub(r'［＃.+］', '', processed_line)
 
     return processed_line
