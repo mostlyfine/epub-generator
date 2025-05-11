@@ -7,6 +7,31 @@ from ebooklib import epub
 import re
 import yaml
 import sys
+import chardet
+
+
+def read_japanese_file(filepath):
+    # ファイルの先頭数千バイトを読み取ってエンコーディングを推定
+    with open(filepath, 'rb') as f:
+        raw_data = f.read(4096)
+        result = chardet.detect(raw_data)
+        encoding = result['encoding']
+
+    # 優先候補の一覧（chardetの結果と近いものを選択）
+    encodings_to_try = ['utf-8', 'cp932', 'shift_jis', 'euc-jp']
+
+    if encoding and encoding.lower() not in [e.lower() for e in encodings_to_try]:
+        encodings_to_try.insert(0, encoding)
+
+    # 順番に試して最初に成功したものを使う
+    for enc in encodings_to_try:
+        try:
+            with open(filepath, 'r', encoding=enc) as f:
+                return f.read()
+        except Exception:
+            continue
+
+    raise UnicodeDecodeError("すべての候補エンコーディングで読み込みに失敗しました。")
 
 
 def convert_ruby_to_html(text: str) -> str:
@@ -294,22 +319,7 @@ img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head>
         chapter_title = re.sub(
             r'^エピソード[0-9]+：', '', os.path.splitext(file_name_only)[0])
 
-        try:
-            with open(txt_file_path, 'rb') as f:
-                raw_data = f.read()
-            try:
-                content_text = raw_data.decode('utf-8')
-            except UnicodeDecodeError:
-                try:
-                    try:
-                        content_text = raw_data.decode('cp932')
-                    except UnicodeDecodeError:
-                        content_text = raw_data.decode('shift_jis')
-                except UnicodeDecodeError:
-                    content_text = raw_data.decode('euc-jp')
-        except Exception as e:
-            print(f"ファイル '{txt_file_path}' の読み込み中にエラー: {e}")
-            continue
+        content_text = read_japanese_file(txt_file_path)
 
         # ルビ・縦中横処理を含むHTML変換
         html_content = convert_full_text_to_html(content_text)
