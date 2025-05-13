@@ -112,7 +112,13 @@ def convert_line_text_to_html(line_text):
         r'\[\[([a-zA-Z0-9.,\-:/+]{2,4}?)\]\]', tcy_replace_callback, processed_line)
 
     # 3. 改行処理など
+    processed_line = re.sub(r'^[	 　＊\−\-ー]+$', '<br /><hr />', processed_line)
     processed_line = re.sub(
+        r'^(第[一二三四五六七八九十0-9０-９]+部.*)$', r'<h3>\1</h3>', processed_line)
+    processed_line = re.sub(
+        r'^(第[一二三四五六七八九十0-9０-９]+章.*)$', r'<h4>\1</h4>', processed_line)
+
+    processed_line = re.sub(r'［＃改(ページ|丁)］', '</p><p><br />', processed_line)
     processed_line = re.sub(r'［＃.+］', '', processed_line)
 
     return processed_line
