@@ -113,8 +113,6 @@ def convert_line_text_to_html(line_text):
 
     # 3. 改行処理など
     processed_line = re.sub(
-        r'^[	 　◇◆☆★〇○◎●△▲▽▼※〒〓]+$', '<br/>', processed_line)
-    processed_line = re.sub(r'^[	 　＊\−\-ー]+$', '<br/><hr/>', processed_line)
     processed_line = re.sub(r'［＃.+］', '', processed_line)
 
     return processed_line
@@ -127,6 +125,9 @@ def convert_full_text_to_html(text_content):
     """
     # Windowsの改行コード(CRLF)をLFに統一し、3つ以上の連続改行を2つにまとめる
     processed_text = text_content.replace('\r\n', '\n')
+    processed_text = re.sub(
+        r'^[	 　◇◆☆★〇○◎●△▲▽▼※〒〓]+$', '\n', processed_text, flags=re.MULTILINE)
+
     processed_text = re.sub(r'\n{3,}', '\n\n\n', processed_text)
 
     html_paragraphs = []
