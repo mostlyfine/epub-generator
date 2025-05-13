@@ -72,14 +72,14 @@ def convert_ruby_to_html(text: str) -> str:
 
         # パターン3: 暗黙的なルビ（漢字 + 二重山括弧）(漢字《ひらがな/カタカナ》)
         # 漢字、ルビ(ひらがな/カタカナ)をキャプチャし、<ruby>タグ形式に置換
-        (re.compile(r'([一-龠々]+)《([ぁ-んァ-ヶー]+)》'),
+        (re.compile(r'([一-龠々・]+)《([ぁ-んァ-ヶー・]+)》'),
          lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
 
         # パターン4: 暗黙的なルビ（漢字 + 括弧）(漢字(ひらがな/カタカナ))
         # 漢字、ルビ(ひらがな/カタカナ)をキャプチャし、<ruby>タグ形式に置換
-        (re.compile(r'([一-龠々]+)\(([ぁ-んァ-ヶー]+)\)'),
+        (re.compile(r'([一-龠々・]+)\(([ぁ-んァ-ヶー・]+)\)'),
          lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
-        (re.compile(r'([一-龠々]+)（([ぁ-んァ-ヶー]+)）'),
+        (re.compile(r'([一-龠々・]+)（([ぁ-んァ-ヶー・]+)）'),
          lambda m: f'<ruby>{m.group(1)}<rp>(</rp><rt>{m.group(2)}</rt><rp>)</rp></ruby>'),
     ]
 
