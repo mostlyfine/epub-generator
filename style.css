@@ -1,0 +1,51 @@
+@namespace epub "http://www.idpf.org/2007/ops";
+body {
+    font-family: "游明朝", "Yu Mincho", "Hiragino Mincho ProN", "ヒラギノ明朝 ProN W3", "MS Mincho", "ＭＳ 明朝", serif;
+    writing-mode: vertical-rl;
+    -webkit-writing-mode: vertical-rl;
+    -epub-writing-mode: vertical-rl;
+    -epub-line-break: normal;
+    line-break: auto;
+    text-orientation: mixed;
+    orphans: 1;
+    widows: 1;
+    overflow-x: hidden;
+    margin: 20px 0 20px 30px; /* 縦書きでは上、右、下、左の順 */
+    padding: 0;
+}
+p {
+    margin: 0 2em 0 0; /* 縦書きでは段落の右側のマージン */
+    line-height: 1.8;
+    text-align: justify;
+}
+h1, h2, h3, h4, h5, h6 {
+    font-weight: bold;
+    margin-top: 1.5em; /* 縦書きでは見出しの右側のマージン */
+    margin-bottom: 0.8em; /* 縦書きでは見出しの左側のマージン */
+    line-height: 1.5;
+    break-before: page; /* 各章(h1)の前に改ページを強制 (ファイル区切り) */
+}
+/* 縦中横用スタイル */
+.tcy {
+    text-combine-upright: all;
+    /* -webkit-text-combine: horizontal; */ /* 古いWebKit用、現在はほぼ不要 */
+}
+/* ルビの基本的なスタイル (多くのリーダーはデフォルトで対応) */
+ruby rt {
+    font-size: 0.6em; /* ルビ文字のサイズを親文字より小さくする */
+    /* 必要に応じてルビの位置調整用のスタイルを追加できますが、リーダー依存性が高まります */
+    /* ruby-position: over; (CSS3 Ruby, EPUB3では writing-mode との組み合わせで自動調整されることが多い) */
+}
+ruby rtc { /* ルビコンテナのスタイル (通常不要) */
+}
+ol {
+    list-style: none; /* 番号なしリストのスタイル */
+}
+img {
+    max-width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+    display: block;
+    margin: 1em auto;
+}
+
