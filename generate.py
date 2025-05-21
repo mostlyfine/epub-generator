@@ -13,6 +13,7 @@ OUTPUT_FILE = 'output.epub'
 COVER_IMAGE = 'cover.png'
 CSS_FILE = 'style.css'
 DEFAULT_CONFIG_FILE = 'config.yaml'
+DEFAULT_DIRECTION = 'rtl'
 
 
 def set_metadata(book, config):
@@ -24,11 +25,11 @@ def set_metadata(book, config):
     book.set_title(config['title'])
     book.add_author(config['author'])
     book.set_language(config.get('language', DEFAULT_LANGUAGE))
+    book.direction = config.get('direction', DEFAULT_DIRECTION)
     book.set_identifier(f'urn:uuid:{os.urandom(16).hex()}')
     book.add_metadata('DC', 'description', config.get('description', ''))
     book.add_metadata('DC', 'publisher', config.get('publisher', ''))
     book.add_metadata('DC', 'date', config.get('date', ''))
-    book.direction = 'rtl'
 
 
 def read_text_file(filepath):
@@ -73,7 +74,8 @@ def create_content(book, config):
 
         print(f"Processing {textfile} as {chapter_title}: {chapter_no}")
         content_text = read_text_file(textfile)
-        content_html = convert_to_html(chapter_title, content_text, book, config)
+        content_html = convert_to_html(
+            chapter_title, content_text, book, config)
         chapter_file_name = f'{chapter_no}.xhtml'
         c = epub.EpubHtml(
             title=chapter_title, file_name=chapter_file_name, lang=lang)
@@ -167,7 +169,8 @@ def convert_line_text_to_html(line_text, book, config):
         book.add_item(image)
         return f'<img src="{image_path}" alt="{image_path}"/>'
 
-    processed_line = re.sub(r'［＃.*[（（](.+\.(png|jpe?g|gif|webp)).*[））].*］', add_image, processed_line)
+    processed_line = re.sub(
+        r'［＃.*[（（](.+\.(png|jpe?g|gif|webp)).*[））].*］', add_image, processed_line)
 
     # 4. 改行処理など
     processed_line = re.sub(r'^[	 　＊\−\-ー]+$', '<br /><hr />', processed_line)
@@ -288,7 +291,7 @@ def get_css_file(config):
     :param book: EPUB Book object
     :param config: Configuration dictionary
     """
-    css_file = config.get('css', CSS_FILE)
+    css_file = config.get('css_file', CSS_FILE)
     with open(css_file, 'r', encoding='utf-8') as f:
         style = f.read()
     style_item = epub.EpubItem(
