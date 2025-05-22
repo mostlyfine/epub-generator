@@ -1,37 +1,189 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import os
-import glob
-from ebooklib import epub
-import re
-import yaml
 import sys
-import chardet
+import os
+import yaml
+import glob
+import re
+
+from ebooklib import epub
+import mimetypes
+
+DEFAULT_LANGUAGE = 'ja'
+INPUT_DIR = 'docs'
+OUTPUT_FILE = 'output.epub'
+COVER_IMAGE = 'cover.png'
+CSS_FILE = 'style.css'
+DEFAULT_CONFIG_FILE = 'config.yaml'
+DEFAULT_DIRECTION = 'rtl'
 
 
-def read_japanese_file(filepath):
-    # ファイルの先頭数千バイトを読み取ってエンコーディングを推定
-    with open(filepath, 'rb') as f:
-        raw_data = f.read(4096)
-        result = chardet.detect(raw_data)
-        encoding = result['encoding']
+def set_metadata(book, config):
+    """
+    EPUBのメタデータを設定する
+    :param book: EPUB Book object
+    :param config: Configuration dictionary
+    """
+    book.set_title(config['title'])
+    book.add_author(config['author'])
+    book.set_language(config.get('language', DEFAULT_LANGUAGE))
+    book.direction = config.get('direction', DEFAULT_DIRECTION)
+    book.set_identifier(f'urn:uuid:{os.urandom(16).hex()}')
+    book.add_metadata('DC', 'description', config.get('description', ''))
+    book.add_metadata('DC', 'publisher', config.get('publisher', ''))
+    book.add_metadata('DC', 'date', config.get('date', ''))
 
-    # 優先候補の一覧（chardetの結果と近いものを選択）
-    encodings_to_try = ['utf-8', 'cp932', 'shift_jis', 'euc-jp']
 
-    if encoding and encoding.lower() not in [e.lower() for e in encodings_to_try]:
-        encodings_to_try.insert(0, encoding)
+def read_text_file(filepath):
+    encodings_to_try = ['utf-8', 'cp932', 'shift_jis', 'euc-jp', 'iso-8859-1']
 
-    # 順番に試して最初に成功したものを使う
-    for enc in encodings_to_try:
+    for encode in encodings_to_try:
         try:
-            with open(filepath, 'r', encoding=enc) as f:
+            with open(filepath, 'r', encoding=encode) as f:
                 return f.read()
         except Exception:
             continue
 
-    raise UnicodeDecodeError("すべての候補エンコーディングで読み込みに失敗しました。")
+    raise UnicodeDecodeError(f'{filepath} のエンコーディングを検出できませんでした。')
+
+
+def create_content(book, config):
+
+    lang = config.get('language', DEFAULT_LANGUAGE)
+    input_dir = config.get('input_directory', INPUT_DIR)
+    txt_files_unsorted = glob.glob(os.path.join(input_dir, '*.txt'))
+
+    def natural_sort_key(s):
+        return [int(text) if text.isdigit() else text.lower() for text in re.split(r'([\s\d_]+)', s)]
+    txt_files = sorted(txt_files_unsorted, key=natural_sort_key)
+
+    if not txt_files:
+        print(f"'{input_dir}' に .txt ファイルが見つかりませんでした。")
+        return
+
+    css = get_css_file(config)
+
+    toc_links = []  # 目次リンク (epub.Linkオブジェクト) を格納
+    nav = epub.EpubNav()
+    nav.add_item(css)
+    book.add_item(nav)
+    spine_items = [nav]
+
+    for i, textfile in enumerate(txt_files):
+        chapter_title = re.sub(
+            r'^(エピソード)?[0-9_ ]+：?', '', os.path.splitext(os.path.basename(textfile))[0])
+        chapter_no = f'chapter_{i+1}'
+
+        print(f"Processing {textfile} as {chapter_title}: {chapter_no}")
+        content_text = read_text_file(textfile)
+        content_html = convert_to_html(
+            chapter_title, content_text, book, config)
+        chapter_file_name = f'{chapter_no}.xhtml'
+        c = epub.EpubHtml(
+            title=chapter_title, file_name=chapter_file_name, lang=lang)
+        c.add_item(css)
+        c.set_content(content_html)
+        book.add_item(c)
+
+        spine_items.append(c)
+        toc_links.append(
+            epub.Link(chapter_file_name, chapter_title, f"toc_chap_{i+1}"))
+
+    book.toc = tuple(toc_links)
+    book.add_item(epub.EpubNcx())
+    book.spine = spine_items
+
+
+def preprocess_text_content(text_content):
+    """
+    テキストコンテンツを事前処理する
+    :param text_content: テキストコンテンツ
+    :return: 処理されたテキストコンテンツ
+    """
+    # Windowsの改行コード(CRLF)をLFに統一し、3つ以上の連続改行を2つにまとめる
+    processed_text = text_content.replace('\r\n', '\n')
+    processed_text = re.sub(
+        r'^[\t 　◇◆☆★〇○◎●△▲▽▼※〒〓]+$', '\n', processed_text, flags=re.MULTILINE)
+    processed_text = re.sub(r'\n{3,}', '\n\n\n',
+                            processed_text, flags=re.MULTILINE)
+    return processed_text
+
+
+def convert_to_html(chapter_title, text_content, book, config):
+    """
+    テキストコンテンツをHTMLに変換する
+    :param text_content: テキストコンテンツ
+    :param book: EPUB Book object
+    :param config: Configuration dictionary
+    :return: HTMLコンテンツ
+    """
+    processed_text = preprocess_text_content(text_content)
+
+    html_paragraphs = [f'<h1>{chapter_title}</h1>']
+    # 2つの改行で段落に分割
+    for para_text in processed_text.strip().split('\n\n\n'):
+        if para_text.strip():
+            html_lines_in_paragraph = []
+            # 段落内の各行に分割
+            for single_line in para_text.split('\n'):
+                if single_line.strip():
+                    processed_html_line = convert_line_text_to_html(
+                        single_line.strip(), book, config)
+                    html_lines_in_paragraph.append(processed_html_line)
+
+            if html_lines_in_paragraph:
+                # 処理された行を<br />で結合し、<p>タグで囲む
+                html_paragraphs.append(
+                    '<p>' + '<br />'.join(html_lines_in_paragraph) + '</p>')
+
+    return '\n'.join(html_paragraphs)
+
+
+def convert_line_text_to_html(line_text, book, config):
+    """
+    1行のテキストを処理し、ルビ変換（行頭以外）、縦中横変換を行います。
+    """
+    input_dir = config.get('input_directory', INPUT_DIR)
+    processed_line = line_text
+
+    # 1. ルビ変換
+    processed_line = convert_ruby_to_html(processed_line)
+
+    # 2. 縦中横変換 ( [[...]] で囲まれた半角英数字記号2～4文字程度)
+    def tcy_replace_callback(match):
+        content = match.group(1)
+        # 縦中横の対象とする文字種と長さをチェック
+        if re.fullmatch(r'[a-zA-Z0-9.,\-:/+]{2,4}', content):
+            return f'<span class="tcy">{content}</span>'
+        return match.group(0)   # 条件に合わなければ元の文字列を返す (例: [[長すぎる文字列]])
+
+    processed_line = re.sub(
+        r'\[\[([a-zA-Z0-9.,\-:/+]{2,4}?)\]\]', tcy_replace_callback, processed_line)
+
+    # 3. 画像の処理
+    def add_image(match):
+        # 画像のパスを取得し、imgタグを生成
+        image_path = match.group(1)
+        media_type, _ = mimetypes.guess_type(image_path)
+        with open(f'{input_dir}/{image_path}', 'rb') as f:
+            img_data = f.read()
+        image = epub.EpubItem(
+            uid=image_path, file_name=image_path, media_type=media_type, content=img_data)
+        book.add_item(image)
+        return f'<img src="{image_path}" alt="{image_path}"/>'
+
+    processed_line = re.sub(
+        r'［＃.*[（（](.+\.(png|jpe?g|gif|webp)).*[））].*］', add_image, processed_line)
+
+    # 4. 改行処理など
+    processed_line = re.sub(r'^[	 　＊\−\-ー]+$', '<br /><hr />', processed_line)
+    processed_line = re.sub(
+        r'^(第[一二三四五六七八九十0-9０-９]+部.*)$', r'<h3>\1</h3>', processed_line)
+    processed_line = re.sub(
+        r'^(第[一二三四五六七八九十0-9０-９]+章.*)$', r'<h4>\1</h4>', processed_line)
+
+    processed_line = re.sub(r'［＃改(ページ|丁)］', '</p><p><br />', processed_line)
+    processed_line = re.sub(r'［＃.+］', '', processed_line)
+
+    return processed_line
 
 
 def convert_ruby_to_html(text: str) -> str:
@@ -91,320 +243,71 @@ def convert_ruby_to_html(text: str) -> str:
     return processed_text
 
 
-def convert_line_text_to_html(line_text):
-    """
-    1行のテキストを処理し、ルビ変換（行頭以外）、縦中横変換を行います。
-    """
-    processed_line = line_text
-
-    # 1. ルビ変換
-    processed_line = convert_ruby_to_html(processed_line)
-
-    # 2. 縦中横変換 ( [[...]] で囲まれた半角英数字記号2～4文字程度)
-    def tcy_replace_callback(match):
-        content = match.group(1)
-        # 縦中横の対象とする文字種と長さをチェック
-        if re.fullmatch(r'[a-zA-Z0-9.,\-:/+]{2,4}', content):
-            return f'<span class="tcy">{content}</span>'
-        return match.group(0)   # 条件に合わなければ元の文字列を返す (例: [[長すぎる文字列]])
-
-    processed_line = re.sub(
-        r'\[\[([a-zA-Z0-9.,\-:/+]{2,4}?)\]\]', tcy_replace_callback, processed_line)
-
-    # 3. 改行処理など
-    processed_line = re.sub(r'^[	 　＊\−\-ー]+$', '<br /><hr />', processed_line)
-    processed_line = re.sub(
-        r'^(第[一二三四五六七八九十0-9０-９]+部.*)$', r'<h3>\1</h3>', processed_line)
-    processed_line = re.sub(
-        r'^(第[一二三四五六七八九十0-9０-９]+章.*)$', r'<h4>\1</h4>', processed_line)
-
-    processed_line = re.sub(r'［＃改(ページ|丁)］', '</p><p><br />', processed_line)
-    processed_line = re.sub(r'［＃.+］', '', processed_line)
-
-    return processed_line
-
-
-def convert_full_text_to_html(text_content):
-    """
-    複数行のテキストコンテンツ全体をHTMLに変換します。
-    段落処理、各行のルビ・縦中横処理を行います。
-    """
-    # Windowsの改行コード(CRLF)をLFに統一し、3つ以上の連続改行を2つにまとめる
-    processed_text = text_content.replace('\r\n', '\n')
-    processed_text = re.sub(
-        r'^[	 　◇◆☆★〇○◎●△▲▽▼※〒〓]+$', '\n', processed_text, flags=re.MULTILINE)
-
-    processed_text = re.sub(r'\n{3,}', '\n\n\n', processed_text)
-
-    html_paragraphs = []
-    # 2つの改行で段落に分割
-    for para_text in processed_text.strip().split('\n\n\n'):
-        if para_text.strip():   # 空の段落は無視
-            html_lines_in_paragraph = []
-            # 段落内の各行に分割
-            for single_line in para_text.split('\n'):
-                if single_line.strip():     # 行が空でなければ処理
-                    # 各行に対してルビと縦中横の変換を適用
-                    processed_html_line = convert_line_text_to_html(
-                        single_line.strip())
-                    html_lines_in_paragraph.append(processed_html_line)
-
-            if html_lines_in_paragraph:
-                # 処理された行を<br />で結合し、<p>タグで囲む
-                html_paragraphs.append(
-                    '<p>' + '<br />'.join(html_lines_in_paragraph) + '</p>')
-
-    return '\n'.join(html_paragraphs)
-
-
-def create_vertical_epub(config):
-    """
-    YAML設定に基づいて、ディレクトリ内のテキストファイルを読み込み、
-    縦書きのEPUBファイルを生成します。ルビ、縦中横、ページ区切りに対応。
-
-    Args:
-        config (dict): YAMLファイルから読み込まれた設定情報。
-    """
-
-    book_config = config.get('book_settings', {})
-    css_config = config.get('css_settings', {})
-
-    book_title = book_config.get('title', "無題")
-    book_author = book_config.get('author', "不明な著者")
-    book_language = book_config.get('language', 'ja')
-    input_dir = book_config.get('input_directory')
-    output_epub_file = book_config.get('output_file')
-    cover_image_path = book_config.get('cover_image')
-
-    if not input_dir or not output_epub_file:
-        print("エラー: 設定ファイルに 'input_directory' または 'output_file' が指定されていません。")
-        return
-
-    config_dir = os.path.dirname(os.path.abspath(
-        config.get('_config_file_path', '.')))
-    input_dir = os.path.join(config_dir, input_dir)
-    output_epub_file = os.path.join(config_dir, output_epub_file)
-    if cover_image_path:
-        cover_image_path = os.path.join(config_dir, cover_image_path)
-        if not os.path.exists(cover_image_path):
-            print(
-                f"警告: 指定されたカバー画像 '{cover_image_path}' が見つかりません。カバーなしで処理を続行します。")
-            cover_image_path = None
-    else:
-        cover_image_path = None
-
+def create_epub(config):
     book = epub.EpubBook()
-    book.set_identifier(f'urn:uuid:{os.urandom(16).hex()}')     # ランダムなUUIDを生成
-    book.set_title(book_title)
-    book.set_language(book_language)
-    book.add_author(book_author)
-    book.direction = 'rtl'
+    set_metadata(book, config)
+    add_cover_image(book, config)
+    css = get_css_file(config)
+    book.add_item(css)
+    create_content(book, config)
+    save_epub(book, config)
 
-    # --- 縦書き用CSS ---
-    font_family = css_config.get(
-        'font_family', '"游明朝", "Yu Mincho", "Hiragino Mincho ProN", "ヒラギノ明朝 ProN W3", "MS Mincho", "ＭＳ 明朝", serif')
-    line_height = css_config.get('line_height', 1.8)
-    margin_vertical = css_config.get('margin_vertical', '20px')
-    margin_horizontal = css_config.get('margin_horizontal', '30px')
 
-    style_content = f"""
-@namespace epub "http://www.idpf.org/2007/ops";
-body {{
-    font-family: {font_family};
-    writing-mode: vertical-rl;
-    -webkit-writing-mode: vertical-rl;
-    -epub-writing-mode: vertical-rl;
-    -epub-line-break: normal;
-    line-break: auto;
-    text-orientation: mixed;
-    orphans: 1;
-    widows: 1;
-    overflow-x: hidden;
-    margin: {margin_vertical} {margin_horizontal};
-    padding: 0;
-}}
-p {{
-    margin: 0 2em 0 0; /* 縦書きでは段落の右側のマージン */
-    line-height: {line_height};
-    text-align: justify;
-}}
-h1, h2, h3, h4, h5, h6 {{
-    font-weight: bold;
-    margin-top: 1.5em; /* 縦書きでは見出しの右側のマージン */
-    margin-bottom: 0.8em; /* 縦書きでは見出しの左側のマージン */
-    line-height: 1.5;
-    break-before: page; /* 各章(h1)の前に改ページを強制 (ファイル区切り) */
-}}
-/* 縦中横用スタイル */
-.tcy {{
-    text-combine-upright: all;
-    /* -webkit-text-combine: horizontal; */ /* 古いWebKit用、現在はほぼ不要 */
-}}
-/* ルビの基本的なスタイル (多くのリーダーはデフォルトで対応) */
-ruby rt {{
-    font-size: 0.6em; /* ルビ文字のサイズを親文字より小さくする */
-    /* 必要に応じてルビの位置調整用のスタイルを追加できますが、リーダー依存性が高まります */
-    /* ruby-position: over; (CSS3 Ruby, EPUB3では writing-mode との組み合わせで自動調整されることが多い) */
-}}
-ruby rtc {{ /* ルビコンテナのスタイル (通常不要) */
-}}
-img {{
-    max-width: 100%;
-    max-height: 90vh;
-    object-fit: contain;
-    display: block;
-    margin: 1em auto;
-}}
-"""
-    default_css = epub.EpubItem(uid="style_default",
-                                file_name="style/default.css",
-                                media_type="text/css",
-                                content=style_content.encode('utf-8'))
-    book.add_item(default_css)
-
-    # --- カバー画像設定 ---
-    actual_cover_item = None
-    if cover_image_path and os.path.exists(cover_image_path):
-        try:
-            with open(cover_image_path, 'rb') as f:
-                cover_data = f.read()
-            cover_filename = os.path.basename(cover_image_path)
-            cover_ext = os.path.splitext(cover_filename)[1].lower()
-            media_type = 'image/jpeg'
-            if cover_ext == '.png':
-                media_type = 'image/png'
-            elif cover_ext == '.gif':
-                media_type = 'image/gif'
-            elif cover_ext == '.svg':
-                media_type = 'image/svg+xml'
-
-            epub_image_filename = f'cover_image{cover_ext}'
-            epub_image_path_in_epub = f'images/{epub_image_filename}'
-
-            cover_html_content = f"""<?xml version='1.0' encoding='utf-8'?>
-<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="{book_language}" lang="{book_language}" style="margin:0; padding:0;"><head><title>カバー</title><meta charset="utf-8"/><style>
-body {{ writing-mode: horizontal-tb !important; text-align: center; margin: 0; padding: 0; height: 100vh; display: flex; justify-content: center; align-items: center; background-color: #f0f0f0; }}
-img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}</style></head><body epub:type="cover">
-<img src="{epub_image_path_in_epub}" alt="カバー画像" /></body></html>"""
-            actual_cover_item = epub.EpubHtml(uid='coverpage', title='カバー', file_name='cover.xhtml',
-                                              content=cover_html_content.encode('utf-8'), lang=book_language)
-            book.add_item(actual_cover_item)
-            cover_image_epub_item = epub.EpubItem(uid='cover_image_data', file_name=epub_image_path_in_epub,
-                                                  media_type=media_type, content=cover_data)
-            book.add_item(cover_image_epub_item)
-            book.add_metadata('OPF', 'meta', '', {
-                              'name': 'cover', 'content': 'cover_image_data'})
-        except Exception as e:
-            print(f"カバー画像の処理中にエラーが発生しました: {e}")
-            actual_cover_item = None
+def add_cover_image(book, config):
+    """
+    EPUBにカバー画像を追加する
+    :param book: EPUB Book object
+    :param config: Configuration dictionary
+    """
+    cover_file = config.get('cover_image', COVER_IMAGE)
+    mimetypes.init()
+    media_type, _ = mimetypes.guess_type(cover_file)
+    if os.path.exists(cover_file):
+        with open(cover_file, 'rb') as f:
+            cover_data = f.read()
+        book.set_cover(cover_file, cover_data)
+        print(f"カバー画像 {cover_file} を追加しました")
     else:
-        if book_config.get('cover_image'):
-            print(
-                f"情報: カバー画像パス '{book_config.get('cover_image')}' は指定されましたが見つかりませんでした。")
-        else:
-            print("情報: カバー画像は設定されていません。")
+        print(f"カバー画像 {cover_file} が見つかりません。")
 
-    # --- テキストファイル読み込みとチャプター作成 ---
-    if not os.path.isdir(input_dir):
-        print(f"エラー: 指定された入力ディレクトリ '{input_dir}' が存在しません。")
-        return
 
-    txt_files_unsorted = glob.glob(os.path.join(input_dir, '*.txt'))
-
-    def natural_sort_key(s):
-        return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
-    txt_files = sorted(txt_files_unsorted, key=natural_sort_key)
-
-    if not txt_files:
-        print(f"情報: 入力ディレクトリ '{input_dir}' に .txt ファイルが見つかりませんでした。")
-
-    chapters = []
-    toc_links = []
-
-    for i, txt_file_path in enumerate(txt_files):
-        file_name_only = os.path.basename(txt_file_path)
-        chapter_title = re.sub(
-            r'^エピソード[0-9]+：', '', os.path.splitext(file_name_only)[0])
-
-        content_text = read_japanese_file(txt_file_path)
-
-        # ルビ・縦中横処理を含むHTML変換
-        html_content = convert_full_text_to_html(content_text)
-
-        safe_chapter_title_for_filename = re.sub(
-            r'[^\x00-\x7F]+', '', chapter_title)
-        if not safe_chapter_title_for_filename:
-            safe_chapter_title_for_filename = f"chapter_{i+1}"
-        else:
-            safe_chapter_title_for_filename = re.sub(
-                r'\s+', '_', safe_chapter_title_for_filename)
-        xhtml_file_name = f"c_{i+1}_{safe_chapter_title_for_filename[:20]}.xhtml"
-
-        chapter_obj = epub.EpubHtml(title=chapter_title,
-                                    file_name=xhtml_file_name,
-                                    lang=book_language)
-        chapter_obj.content = f"""<?xml version='1.0' encoding='utf-8'?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="{book_language}" lang="{book_language}">
-<head>
-    <meta charset="utf-8" />
-    <title>{chapter_title}</title>
-    <link rel="stylesheet" type="text/css" href="style/default.css" />
-</head>
-<body>
-    <h1>{chapter_title}</h1>
-    {html_content}
-</body>
-</html>
-""".encode('utf-8')
-        chapter_obj.add_item(default_css)   # CSSを各チャプターにリンク
-        book.add_item(chapter_obj)
-        chapters.append(chapter_obj)
-        toc_links.append(
-            epub.Link(xhtml_file_name, chapter_title, f"toc_chap_{i+1}"))
-
-    # --- 目次 (TOC), NCX, Nav の設定 ---
-    book.toc = tuple(toc_links)
-    book.add_item(epub.EpubNcx())
-    book.add_item(epub.EpubNav())
-
-    # --- Spine (本文の表示順序) の設定 ---
-    spine_items = ['nav']
-    if actual_cover_item:
-        spine_items.append(actual_cover_item)
-    spine_items.extend(chapters)
-    book.spine = spine_items
-
-    # --- EPUBファイル書き出し ---
+def save_epub(book, config):
+    """
+    EPUBファイルの保存
+    :param book: EPUB Book object
+    :param config: Configuration dictionary
+    """
     try:
-        os.makedirs(os.path.dirname(output_epub_file), exist_ok=True)
-        epub.write_epub(output_epub_file, book, {
-                        "epub3_pages": True, "epub3_landmark": True})
-        print(f"EPUBファイル '{output_epub_file}' を正常に生成しました。")
+        output_file = config.get('output_file', OUTPUT_FILE)
+        epub.write_epub(output_file, book, {
+            "epub3_pages": True, "epub3_landmark": True})
+        print(f"EPUBファイル {output_file} の保存しました")
     except Exception as e:
-        print(f"EPUBファイルの書き出し中にエラーが発生しました: {e}")
+        print(f"EPUBファイル {output_file} の保存に失敗しました: {e}")
 
 
-# --- メイン処理 ---
+def get_css_file(config):
+    """
+    CSSファイルをEPUBに追加する
+    :param book: EPUB Book object
+    :param config: Configuration dictionary
+    """
+    css_file = config.get('css_file', CSS_FILE)
+    with open(css_file, 'r', encoding='utf-8') as f:
+        style = f.read()
+    style_item = epub.EpubItem(
+        uid="style_default", file_name=css_file, media_type="text/css", content=style)
+    return style_item
+
+
 if __name__ == '__main__':
-    # コマンドライン引数から設定ファイル名を取得
-    config_file_name = sys.argv[1] if len(sys.argv) > 1 else 'config.yaml'
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_file_path = os.path.join(script_dir, config_file_name)
+    config_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CONFIG_FILE
 
-    if not os.path.exists(config_file_path):
-        print(f"エラー: 設定ファイル '{config_file_path}' が見つかりません。")
-        print("スクリプトと同じディレクトリに config.yaml を作成するか、引数で設定ファイルを指定してください。内容はconfig.yaml.sampleを参考にしてください：")
-    else:
-        try:
-            with open(config_file_path, 'r', encoding='utf-8') as f:
-                config_data = yaml.safe_load(f)
-            if config_data is None:
-                print(f"エラー: 設定ファイル '{config_file_path}' が空か、または無効なYAML形式です。")
-            else:
-                config_data['_config_file_path'] = config_file_path
-                create_vertical_epub(config_data)
-        except yaml.YAMLError as e:
-            print(f"設定ファイル '{config_file_path}' の解析中にエラーが発生しました: {e}")
-        except Exception as e:
-            print(f"処理中に予期せぬエラーが発生しました: {e}")
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        book_config = config.get('book_settings', {})
+    except Exception as e:
+        print(f"{config_file} を読み込み時にエラーが発生しました: {e}")
+
+    create_epub(book_config)
