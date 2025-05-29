@@ -52,7 +52,7 @@ def create_content(book, config):
     txt_files_unsorted = glob.glob(os.path.join(input_dir, '*.txt'))
 
     def natural_sort_key(s):
-        return [int(text) if text.isdigit() else text.lower() for text in re.split(r'([\s\d_]+)', s)]
+        return [int(text) if text.isdigit() and text.strip() else text.lower() for text in re.split(r'([\s\d_]+)', re.sub(r"[\u3000 \t]", "", s)) if text.strip()]
     txt_files = sorted(txt_files_unsorted, key=natural_sort_key)
 
     if not txt_files:
@@ -61,11 +61,19 @@ def create_content(book, config):
 
     css = get_css_file(config)
 
-    toc_links = []  # 目次リンク (epub.Linkオブジェクト) を格納
-    nav = epub.EpubNav()
+    c1 = epub.EpubHtml(title=config['title'],
+                       file_name='title.xhtml', lang=lang)
+    c1.set_content(
+        f"<div class=\"wrap\"><div class=\"title\"><h1>{config['title']}</h1><div class=\"author\">{config['author']}</div></div></div>")
+    c1.add_item(css)
+    book.add_item(c1)
+
+    # 目次リンク (epub.Linkオブジェクト) を格納
+    toc_links = []
+    nav = epub.EpubNav(title="目次")
     nav.add_item(css)
     book.add_item(nav)
-    spine_items = [nav]
+    spine_items = [c1]
 
     for i, textfile in enumerate(txt_files):
         chapter_title = re.sub(
@@ -78,9 +86,8 @@ def create_content(book, config):
             chapter_title, content_text, book, config)
         chapter_file_name = f'{chapter_no}.xhtml'
         c = epub.EpubHtml(
-            title=chapter_title, file_name=chapter_file_name, lang=lang)
+            title=chapter_title, file_name=chapter_file_name, content=content_html, lang=lang)
         c.add_item(css)
-        c.set_content(content_html)
         book.add_item(c)
 
         spine_items.append(c)

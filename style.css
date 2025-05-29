@@ -76,3 +76,30 @@ img {
     display: block;
     margin: 3em auto;
 }
+
+.wrap {
+    -epub-writing-mode: horizontal-tb;
+    width: 98%;
+    height: 98%;
+    border: double 5px #a0a0a0;
+}
+
+.title {
+    margin: 1em auto;
+    -epub-writing-mode: vertical-rl;
+    writing-mode: vertical-rl;
+    height: 100%;
+}
+
+.title h1 {
+    text-indent: 1em;
+    font-size: 1.6em;
+    margin-left: 0;
+    break-before: auto !important;
+}
+
+.title .author {
+    font-size: 1.4em;
+    text-align: right;
+    margin-bottom: 80px;
+}
