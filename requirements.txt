@@ -1,3 +1,4 @@
 ebooklib==0.19
 PyYAML==6.0.2
 chardet==5.2.0
+markdown==3.3.7
