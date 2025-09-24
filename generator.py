@@ -3,6 +3,7 @@ import os
 import yaml
 import glob
 import re
+import markdown
 
 from ebooklib import epub
 import mimetypes
@@ -49,14 +50,20 @@ def create_content(book, config):
 
     lang = config.get('language', DEFAULT_LANGUAGE)
     input_dir = config.get('input_directory', INPUT_DIR)
-    txt_files_unsorted = glob.glob(os.path.join(input_dir, '*.txt'))
+
+    patterns = ["*.txt", "*.md"]
+    txt_files_unsorted = []
+    for pattern in patterns:
+        txt_files_unsorted.extend(glob.glob(os.path.join(input_dir, pattern)))
 
     def natural_sort_key(s):
         return [int(text) if text.isdigit() and text.strip() else text.lower() for text in re.split(r'([\s\d_]+)', re.sub(r"[\u3000 \t]", "", s)) if text.strip()]
     txt_files = sorted(txt_files_unsorted, key=natural_sort_key)
 
     if not txt_files:
-        print(f"'{input_dir}' に .txt ファイルが見つかりませんでした。")
+        pattern_str = ', '.join(patterns)
+        print(
+            f"'{input_dir}' に {pattern_str} ファイルが見つかりませんでした。")
         return
 
     css = get_css_file(config)
@@ -82,8 +89,15 @@ def create_content(book, config):
 
         print(f"Processing {textfile} as {chapter_title}: {chapter_no}")
         content_text = read_text_file(textfile)
-        content_html = convert_to_html(
-            chapter_title, content_text, book, config)
+        if textfile.lower().endswith('.md'):
+            content_html = markdown.markdown(
+                content_text,
+                extensions=['extra']
+            )
+        else:
+            content_html = convert_to_html(
+                chapter_title, content_text, book, config)
+
         chapter_file_name = f'{chapter_no}.xhtml'
         c = epub.EpubHtml(
             title=chapter_title, file_name=chapter_file_name, content=content_html, lang=lang)
@@ -140,8 +154,6 @@ def convert_to_html(chapter_title, text_content, book, config):
                 # 処理された行を<br />で結合し、<p>タグで囲む
                 html_paragraphs.append(
                     '<p>' + '<br />'.join(html_lines_in_paragraph) + '</p>')
-
-    return '\n'.join(html_paragraphs)
 
 
 def convert_line_text_to_html(line_text, book, config):
